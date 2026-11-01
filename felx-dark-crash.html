@@ -1,0 +1,137 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FELX DARK CRASH</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080a12;color:#fff;font-family:Arial,sans-serif}
+header{padding:22px;text-align:center;background:#111629;border-bottom:1px solid #333}
+header h1{color:#a78bfa;margin:0}
+header p{color:#aaa;font-size:13px}
+main{max-width:500px;margin:25px auto;padding:15px}
+.panel{background:#141a2b;border:1px solid #303954;padding:20px;border-radius:16px;margin-bottom:15px}
+h2{font-size:18px;color:#c4b5fd}
+input{width:100%;padding:13px;margin:8px 0;background:#080d19;border:1px solid #38415e;border-radius:9px;color:white}
+button{width:100%;padding:13px;margin-top:10px;border:0;border-radius:9px;background:#8055e9;color:white;font-weight:bold}
+button.secondary{background:#252e45}
+.hidden{display:none}
+.result{padding:15px;background:#0a1020;border-radius:10px;margin-top:10px}
+.small{color:#9ca3af;font-size:12px;line-height:1.7}
+</style>
+</head>
+<body>
+<header>
+<h1>FELX DARK CRASH</h1>
+<p>نظام إدارة وتحليل بيانات Crash</p>
+</header>
+<main>
+<section class="panel" id="login">
+<h2>دخول الأدمن</h2>
+<input id="adminEmail" type="email" placeholder="بريد الأدمن">
+<input id="adminPass" type="password" placeholder="كلمة المرور">
+<button id="loginBtn">تسجيل الدخول</button>
+<p id="loginMsg" class="small"></p>
+</section>
+
+<section id="dashboard" class="hidden">
+<div class="panel">
+<h2>لوحة تحكم الأدمن</h2>
+<p id="adminName" class="small"></p>
+<button class="secondary" id="logoutBtn">خروج</button>
+</div>
+<div class="panel">
+<h2>تحليل الجولات السابقة</h2>
+<input id="rounds" placeholder="أدخل النتائج مفصولة بفواصل، مثال: 1.2, 2.5, 1.1">
+<button id="analyzeBtn">تحليل البيانات</button>
+<div id="analysis" class="result small">لم يتم إدخال بيانات بعد.</div>
+</div>
+<div class="panel">
+<h2>نشر ملاحظة للمستخدمين</h2>
+<input id="notice" placeholder="اكتب الملاحظة">
+<button id="publishBtn">نشر الملاحظة</button>
+<p id="publishMsg" class="small"></p>
+</div>
+</section>
+</main>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut}
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,doc,getDoc,collection,addDoc,serverTimestamp}
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig={
+apiKey:"AIzaSyBBtii8afiExScHJ8LS9RScHYHnUVTBAUw",
+authDomain:"felx-dark-76efb.firebaseapp.com",
+projectId:"felx-dark-76efb",
+storageBucket:"felx-dark-76efb.firebasestorage.app",
+messagingSenderId:"318709912096",
+appId:"1:318709912096:web:1432ebdde01028ae2be245",
+measurementId:"G-NKF7R6WFXG"
+};
+
+const app=initializeApp(firebaseConfig);
+const auth=getAuth(app);
+const db=getFirestore(app);
+const $=id=>document.getElementById(id);
+
+$("loginBtn").onclick=async()=>{
+try{
+await signInWithEmailAndPassword(auth,$("adminEmail").value,$("adminPass").value);
+$("loginMsg").textContent="";
+}catch(e){$("loginMsg").textContent="بيانات الدخول غير صحيحة أو حدث خطأ."}
+};
+
+onAuthStateChanged(auth,async user=>{
+if(!user){
+$("login").classList.remove("hidden");
+$("dashboard").classList.add("hidden");
+return;
+}
+try{
+const snap=await getDoc(doc(db,"users",user.uid));
+if(!snap.exists()||snap.data().role!=="admin"){
+await signOut(auth);
+$("loginMsg").textContent="هذا الحساب ليس حساب أدمن.";
+return;
+}
+$("adminName").textContent="مرحبًا بالأدمن: "+(snap.data().userId||user.email);
+$("login").classList.add("hidden");
+$("dashboard").classList.remove("hidden");
+}catch(e){$("loginMsg").textContent="تعذر التحقق من صلاحيات الأدمن."}
+});
+
+$("logoutBtn").onclick=()=>signOut(auth);
+
+$("analyzeBtn").onclick=()=>{
+const values=$("rounds").value.split(",").map(x=>Number(x.trim())).filter(x=>Number.isFinite(x)&&x>0);
+if(values.length<2){$("analysis").textContent="أدخل نتيجتين صحيحتين على الأقل.";return}
+const avg=values.reduce((a,b)=>a+b,0)/values.length;
+const max=Math.max(...values);
+const min=Math.min(...values);
+$("analysis").textContent=
+"عدد الجولات: "+values.length+
+" | المتوسط: "+avg.toFixed(2)+"x"+
+" | أعلى نتيجة: "+max.toFixed(2)+"x"+
+" | أقل نتيجة: "+min.toFixed(2)+"x"+
+" — هذا تحليل وصفي للبيانات السابقة وليس تنبؤًا بالجولة القادمة.";
+};
+
+$("publishBtn").onclick=async()=>{
+const notice=$("notice").value.trim();
+if(!notice){$("publishMsg").textContent="اكتب الملاحظة أولًا.";return}
+try{
+await addDoc(collection(db,"notices"),{
+text:notice,createdAt:serverTimestamp(),active:true
+});
+$("publishMsg").textContent="تم حفظ الملاحظة في قاعدة البيانات.";
+$("notice").value="";
+}catch(e){$("publishMsg").textContent="تعذر النشر. راجع قواعد Firestore."}
+};
+</script>
+</body>
+</html>
